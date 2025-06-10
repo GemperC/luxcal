@@ -10,6 +10,7 @@ import 'package:LuxCal/src/services/fcm.dart';
 import 'package:LuxCal/src/utils/messenger.dart';
 import 'package:calendar_view/calendar_view.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
@@ -34,8 +35,11 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  final fcm = FCM();
+
   await Future.delayed(Duration(seconds: 1));
-  await FCM().getNotificationPermissions();
+  await fcm.getNotificationPermissions();
+
   await GetStorage.init();
   setupLocator();
 
@@ -82,6 +86,23 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   final storage = GetStorage();
+  @override
+  void initState() {
+    super.initState();
+    _setupNotificationHandlers();
+  }
+
+  void _setupNotificationHandlers() {
+    // Handle notification when app is opened from terminated state
+    FirebaseMessaging.instance
+        .getInitialMessage()
+        .then((RemoteMessage? message) {
+      if (message != null) {
+        print('App opened from notification: ${message.messageId}');
+        // Handle the notification
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -34,16 +34,82 @@ class _EventsWidgetState extends State<EventsWidget> {
     final now = DateTime.now();
     final twoWeeksFromNow = now.add(Duration(days: 14));
 
-    // Filter events to get only those that are upcoming and within the next 2 weeks
-    final upcomingEvents = events
-        .where((event) =>
-            event.startDate.isAfter(now) &&
-            event.startDate.isBefore(twoWeeksFromNow))
-        .toList();
+    // Get today's date at start of day for comparison
+    final todayStart = DateTime(now.year, now.month, now.day);
+
+    // Filter events to get those that are happening today OR in the future (within 2 weeks)
+    final upcomingEvents = events.where((event) {
+      final eventStart = DateTime(
+          event.startDate.year, event.startDate.month, event.startDate.day);
+      final eventEnd =
+          DateTime(event.endDate.year, event.endDate.month, event.endDate.day);
+
+      // Include events that:
+      // 1. Start today or in the future
+      // 2. Are currently ongoing (started before today but end today or later)
+      // 3. Are within the next 2 weeks
+      return (eventStart.isAtSameMomentAs(todayStart) ||
+              eventStart.isAfter(todayStart) ||
+              (eventStart.isBefore(todayStart) &&
+                  (eventEnd.isAtSameMomentAs(todayStart) ||
+                      eventEnd.isAfter(todayStart)))) &&
+          eventStart.isBefore(twoWeeksFromNow);
+    }).toList();
 
     // Sort the filtered events by startDate
     upcomingEvents.sort((a, b) => a.startDate.compareTo(b.startDate));
     return upcomingEvents;
+  }
+
+  // Also fix the event tile to show "Today" for today's events
+  Widget _eventTile(EventModel event) {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final eventStart = DateTime(
+        event.startDate.year, event.startDate.month, event.startDate.day);
+
+    String timeText;
+    if (eventStart.isAtSameMomentAs(todayStart)) {
+      timeText = "Today";
+    } else {
+      final daysDifference = eventStart.difference(todayStart).inDays;
+      timeText = "In $daysDifference Days";
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: InkWell(
+        onTap: () {
+          context.push('/selectedEvent', extra: event);
+        },
+        child: Container(
+          height: 40,
+          decoration: BoxDecoration(
+              color: event.color,
+              borderRadius: BorderRadius.all(Radius.circular(20))),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 12, left: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    event.title ?? 'No Title',
+                    style: AppTypography.calendarDays
+                        .copyWith(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                  Text(
+                    timeText,
+                    style: AppTypography.calendarDays
+                        .copyWith(fontSize: 14, fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   List<NewsModel> filterAndSortNews(List<NewsModel>? news) {
@@ -228,43 +294,6 @@ class _EventsWidgetState extends State<EventsWidget> {
         final event = selectedDayEvents[index];
         return _eventTile(event);
       },
-    );
-  }
-
-  Widget _eventTile(EventModel event) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: InkWell(
-        onTap: () {
-          context.push('/selectedEvent', extra: event);
-        },
-        child: Container(
-          height: 40,
-          decoration: BoxDecoration(
-              color: event.color,
-              borderRadius: BorderRadius.all(Radius.circular(20))),
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 12, left: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    event.title ?? 'No Title',
-                    style: AppTypography.calendarDays
-                        .copyWith(fontSize: 18, fontWeight: FontWeight.w900),
-                  ),
-                  Text(
-                    "In ${event.startDate.getDayDifference(DateTime.now())} Days",
-                    style: AppTypography.calendarDays
-                        .copyWith(fontSize: 14, fontWeight: FontWeight.w900),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 

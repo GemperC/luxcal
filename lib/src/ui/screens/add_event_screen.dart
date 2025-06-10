@@ -16,6 +16,7 @@ import 'package:LuxCal/src/utils/auth_utils.dart';
 import 'package:LuxCal/src/utils/event_colors.dart';
 import 'package:LuxCal/src/utils/messenger.dart';
 import 'package:LuxCal/src/utils/screen_size.dart';
+import 'package:LuxCal/src/utils/upload_images.dart';
 import 'package:LuxCal/src/utils/validators.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cupertino_hebrew_date_picker/cupertino_hebrew_date_picker.dart';
@@ -132,7 +133,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
 
       // If a thumbnail is picked, upload it.
       if (pickedImage != null) {
-        await _uploadImagesToFirebase(newEvent.id, [pickedImage!]);
+        await uploadImagesToFirebase(newEvent.id, [pickedImage!]);
       }
 
       Navigator.pop(context); // Dismiss loading dialog.
@@ -163,46 +164,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
     );
   }
 
-  Future<void> _uploadImagesToFirebase(
-      String eventId, List<XFile> images) async {
-    try {
-      for (var image in images) {
-        String fileName = path.basename(image.path);
-        Reference storageRef = FirebaseStorage.instance
-            .ref()
-            .child('event_albums/$eventId/$fileName');
-
-        UploadTask uploadTask;
-        if (kIsWeb) {
-          final bytes = await image.readAsBytes();
-          uploadTask = storageRef.putData(bytes);
-        } else {
-          uploadTask = storageRef.putFile(File(image.path));
-        }
-
-        uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-          print(
-              'Progress: ${(snapshot.bytesTransferred / snapshot.totalBytes) * 100}%');
-        }, onError: (e) {
-          print(uploadTask.snapshot);
-          if (e.code == 'permission-denied') {
-            print('No permission to upload.');
-          }
-        });
-
-        await uploadTask;
-        final downloadURL = await storageRef.getDownloadURL();
-        print('Download URL: $downloadURL');
-        await FirebaseFirestore.instance
-            .collection('events')
-            .doc(eventId)
-            .collection('images')
-            .add({'path': storageRef.fullPath, 'url': downloadURL});
-      }
-    } catch (e) {
-      print('Error uploading images: $e');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {

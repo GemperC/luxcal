@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:LuxCal/src/utils/upload_images.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:LuxCal/core/theme/pallette.dart';
@@ -173,7 +174,7 @@ class _SelectedNewsScreenState extends State<SelectedNewsScreen> {
                 setState(() {
                   _isUploadingPhotos = true;
                 });
-                await _uploadNewsImagesToFirebase(widget.newsModel.id!, images);
+                await uploadNewsImagesToFirebase(widget.newsModel.id!, images);
                 setState(() {
                   _isUploadingPhotos = false;
                 });
@@ -184,55 +185,6 @@ class _SelectedNewsScreenState extends State<SelectedNewsScreen> {
         : Container();
   }
 
-  Future<void> _uploadNewsImagesToFirebase(
-      String newsId, List<XFile> images) async {
-    try {
-      for (var image in images) {
-        String fileName = path.basename(image.path);
-        Reference storageRef = FirebaseStorage.instance
-            .ref()
-            .child('news_albums/$newsId/$fileName');
-
-        UploadTask uploadTask;
-        if (kIsWeb) {
-          // Read as bytes and use putData for Web
-          final data = await image.readAsBytes();
-          uploadTask = storageRef.putData(data);
-        } else {
-          // Use putFile for mobile/desktop
-          uploadTask = storageRef.putFile(File(image.path));
-        }
-
-        // Monitor the upload progress
-        uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-          print(
-              'Progress: ${(snapshot.bytesTransferred / snapshot.totalBytes) * 100} %');
-        }, onError: (e) {
-          print(uploadTask.snapshot);
-          // You might want to show a snackbar or similar for errors
-          if (e.code == 'permission-denied') {
-            print('User does not have permission to upload to this reference.');
-          }
-        });
-
-        // Wait until the upload completes
-        await uploadTask;
-
-        // Get the download URL
-        final downloadURL = await storageRef.getDownloadURL();
-        print('Download URL: $downloadURL');
-
-        // Save the download URL and path to Firestore
-        await FirebaseFirestore.instance
-            .collection('news')
-            .doc(newsId)
-            .collection('images')
-            .add({'path': storageRef.fullPath, 'url': downloadURL});
-      }
-    } catch (e) {
-      print('Error uploading images: $e');
-    }
-  }
 
   Widget _autherFromField() => Stack(
         children: [

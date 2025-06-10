@@ -10,6 +10,7 @@ import 'package:LuxCal/src/ui/widgets/event_fields_widget.dart';
 import 'package:LuxCal/src/ui/widgets/spacer.dart';
 import 'package:LuxCal/src/utils/auth_utils.dart';
 import 'package:LuxCal/src/utils/screen_size.dart';
+import 'package:LuxCal/src/utils/upload_images.dart';
 import 'package:LuxCal/src/utils/validators.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -457,7 +458,7 @@ class _SelectedEventScreenState extends State<SelectedEventScreen> {
               final ImagePicker _picker = ImagePicker();
               final List<XFile>? images = await _picker.pickMultiImage();
               if (images != null && images.isNotEmpty) {
-                await _uploadImagesToFirebase(widget.eventModel.id, images);
+                await uploadImagesToFirebase(widget.eventModel.id, images);
               }
             },
             child: const Text("Add Photos"),
@@ -465,55 +466,6 @@ class _SelectedEventScreenState extends State<SelectedEventScreen> {
         : Container();
   }
 
-  Future<void> _uploadImagesToFirebase(
-      String eventId, List<XFile> images) async {
-    try {
-      for (var image in images) {
-        String fileName = path.basename(image.path);
-        Reference storageRef = FirebaseStorage.instance
-            .ref()
-            .child('event_albums/$eventId/$fileName');
-
-        UploadTask uploadTask;
-        if (kIsWeb) {
-          // On Web, use putData since File(image.path) doesn't work
-          final bytes = await image.readAsBytes();
-          uploadTask = storageRef.putData(bytes);
-        } else {
-          // On mobile/desktop, use putFile
-          uploadTask = storageRef.putFile(File(image.path));
-        }
-
-        // Monitor the upload progress.
-        uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-          print(
-              'Progress: ${(snapshot.bytesTransferred / snapshot.totalBytes) * 100} %');
-        }, onError: (e) {
-          print(uploadTask.snapshot);
-          if (e.code == 'permission-denied') {
-            print('User does not have permission to upload to this reference.');
-          }
-        });
-
-        // Wait until the upload completes.
-        await uploadTask;
-
-        // Get the download URL and store it in Firestore.
-        final downloadURL = await storageRef.getDownloadURL();
-        print('Download URL: $downloadURL');
-        await FirebaseFirestore.instance
-            .collection('events')
-            .doc(eventId)
-            .collection('images')
-            .add({
-          'path': storageRef.fullPath,
-          'url': downloadURL,
-        });
-      }
-    } catch (e) {
-      print('Error uploading images: $e');
-    }
-  }
 
   Widget _viewGalleryButton() {
     bool isMaker = false;

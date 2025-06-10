@@ -1,6 +1,8 @@
+import 'package:LuxCal/src/blocs/calendar/calendar_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../utils/download_all_zip.dart';
 import '../../utils/download_utils.dart'; // <-- Import the new ZIP logic
 
@@ -161,16 +163,50 @@ class FullImageScreen extends StatelessWidget {
   /// Deletes the image by finding its Firestore document and removing it along with the storage file.
   Future<void> _deleteImage(BuildContext context) async {
     try {
+      // Find the image document in Firestore
       final querySnapshot = await FirebaseFirestore.instance
           .collectionGroup('images')
           .where('url', isEqualTo: imageUrl)
           .get();
+
       if (querySnapshot.docs.isNotEmpty) {
         final docSnapshot = querySnapshot.docs.first;
         final imagePath = docSnapshot['path'];
+        final isMain = docSnapshot.data().containsKey('isMain')
+            ? docSnapshot['isMain']
+            : false;
 
-        await docSnapshot.reference.delete();
+        // Get the parent collection reference to find if this is an event or news image
+        final parentPath = docSnapshot.reference.parent.parent?.path;
+
+        // Delete from storage
         await FirebaseStorage.instance.ref(imagePath).delete();
+
+        // Delete from Firestore
+        await docSnapshot.reference.delete();
+
+        // If this was the main image, update the parent document
+        if (isMain && parentPath != null) {
+          // Find the next image to set as main
+          final remainingImages = await docSnapshot.reference.parent.get();
+
+          if (remainingImages.docs.isNotEmpty) {
+            // Set the first remaining image as the new main image
+            final newMainImage = remainingImages.docs.first;
+            final newMainUrl = newMainImage['url'];
+
+            // Update the main image in parent document
+            await docSnapshot.reference.parent.parent!
+                .update({'imageUrl': newMainUrl});
+
+            // Mark the new image as main
+            await newMainImage.reference.update({'isMain': true});
+          } else {
+            // No images left, remove the main image URL
+            await docSnapshot.reference.parent.parent!
+                .update({'imageUrl': null});
+          }
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Image deleted successfully')),
@@ -186,6 +222,11 @@ class FullImageScreen extends StatelessWidget {
         SnackBar(content: Text('Error deleting image: $e')),
       );
     }
+  }
+
+  static void refreshCalendarAfterPhotoOperation(BuildContext context) {
+    // Trigger calendar refresh
+    context.read<CalendarBloc>().add(InilaizeCalendar());
   }
 
   /// Downloads a single image (currently placeholder).

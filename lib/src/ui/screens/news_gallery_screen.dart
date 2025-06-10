@@ -157,18 +157,62 @@ class FullImageScreen extends StatelessWidget {
     required this.imageUrl,
     required this.isMaker,
   }) : super(key: key);
-
+// Replace the existing _deleteImage method in event_gallery_screen.dart (FullImageScreen class)
   Future<void> _deleteImage(BuildContext context) async {
     try {
-      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+      // Find the image document in Firestore
+      final querySnapshot = await FirebaseFirestore.instance
           .collectionGroup('images')
           .where('url', isEqualTo: imageUrl)
           .get();
+
       if (querySnapshot.docs.isNotEmpty) {
         final docSnapshot = querySnapshot.docs.first;
-        String imagePath = docSnapshot['path'];
-        await docSnapshot.reference.delete();
+        final imagePath = docSnapshot['path'];
+        final isMain = docSnapshot.data().containsKey('isMain')
+            ? docSnapshot['isMain']
+            : false;
+
+        // Get the parent collection reference to find the event ID
+        final parentRef = docSnapshot.reference.parent.parent;
+
+        // Delete from storage
         await FirebaseStorage.instance.ref(imagePath).delete();
+
+        // Delete from Firestore
+        await docSnapshot.reference.delete();
+
+        // If this was the main image, update the parent event document
+        if (isMain && parentRef != null) {
+          // Find the next image to set as main
+          final remainingImages = await docSnapshot.reference.parent
+              .orderBy('uploadedAt')
+              .limit(1)
+              .get();
+
+          if (remainingImages.docs.isNotEmpty) {
+            // Set the first remaining image as the new main image
+            final newMainImage = remainingImages.docs.first;
+            final newMainUrl = newMainImage['url'];
+
+            // Update the main image in parent event document
+            await parentRef.update({'imageUrl': newMainUrl});
+
+            // Mark the new image as main
+            await newMainImage.reference.update({'isMain': true});
+
+            print('Updated main image to: $newMainUrl');
+          } else {
+            // No images left, remove the main image URL
+            await parentRef.update({'imageUrl': null});
+            print('Removed main image URL - no images left');
+          }
+
+          // Refresh the calendar to update the UI
+          // Note: You'll need to access the CalendarBloc from context if available
+          // This might require passing the context down or using a different approach
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Image deleted successfully')),
         );

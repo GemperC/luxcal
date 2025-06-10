@@ -286,120 +286,213 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
     DateTime startDate = event.startDate;
     DateTime endDate = event.endDate;
 
-    // Add the original event if it falls within the specified month
+    // Add the original event if it falls within the specified year
     if (startDate.year == year) {
       occurrences.add(event);
     }
 
-    if (event.hebrewFormat!) {
-      JewishDate hebrewStartDate = JewishDate.fromDateTime(startDate);
-      JewishDate hebrewEndDate = JewishDate.fromDateTime(endDate);
+    if (event.hebrewFormat == true) {
+      try {
+        JewishDate hebrewStartDate = JewishDate.fromDateTime(startDate);
+        JewishDate hebrewEndDate = JewishDate.fromDateTime(endDate);
 
-      switch (event.recurrence) {
-        case 'Every Day':
-          while (hebrewStartDate.getJewishYear() - 3760 <= year + 1) {
-            hebrewStartDate.forward(Calendar.DATE, 1);
-            hebrewEndDate.forward(Calendar.DATE, 1);
-            if (hebrewStartDate.getJewishYear() - 3760 <= year + 1) {
-              occurrences.add(event.copyWith(
-                startDate: hebrewStartDate.getGregorianCalendar(),
-                endDate: hebrewEndDate.getGregorianCalendar(),
-              ));
+        // Calculate the duration between start and end for Hebrew events
+        Duration eventDuration = endDate.difference(startDate);
+
+        switch (event.recurrence) {
+          case 'Every Day':
+            for (int i = 1; i <= 365; i++) {
+              hebrewStartDate =
+                  JewishDate.fromDateTime(startDate.add(Duration(days: i)));
+              DateTime newGregorianStart =
+                  hebrewStartDate.getGregorianCalendar();
+
+              if (newGregorianStart.year <= year + 1) {
+                DateTime newGregorianEnd = newGregorianStart.add(eventDuration);
+                occurrences.add(event.copyWith(
+                  startDate: newGregorianStart,
+                  endDate: newGregorianEnd,
+                ));
+              }
             }
-          }
-          break;
+            break;
 
-        case 'Once a Week':
-          while (hebrewStartDate.getJewishYear() - 3760 <= year + 1) {
-            hebrewStartDate.forward(Calendar.DATE, 7);
-            hebrewEndDate.forward(Calendar.DATE, 7);
-            if (hebrewStartDate.getJewishYear() - 3760 <= year + 1) {
-              occurrences.add(event.copyWith(
-                startDate: hebrewStartDate.getGregorianCalendar(),
-                endDate: hebrewEndDate.getGregorianCalendar(),
-              ));
+          case 'Once a Week':
+            for (int i = 1; i <= 52; i++) {
+              hebrewStartDate =
+                  JewishDate.fromDateTime(startDate.add(Duration(days: i * 7)));
+              DateTime newGregorianStart =
+                  hebrewStartDate.getGregorianCalendar();
+
+              if (newGregorianStart.year <= year + 1) {
+                DateTime newGregorianEnd = newGregorianStart.add(eventDuration);
+                occurrences.add(event.copyWith(
+                  startDate: newGregorianStart,
+                  endDate: newGregorianEnd,
+                ));
+              }
             }
-          }
-          break;
+            break;
 
-        case 'Once a Month':
-          print("hebrewStartDate.getJewishYear() == year");
-          print(hebrewStartDate.getGregorianCalendar());
-          print(hebrewStartDate.getJewishYear());
-          print(year);
+          case 'Once a Month':
+            // For Hebrew monthly recurrence, advance by Hebrew months
+            int originalJewishMonth = hebrewStartDate.getJewishMonth();
+            int originalJewishDay = hebrewStartDate.getJewishDayOfMonth();
+            int currentYear = hebrewStartDate.getJewishYear();
 
-          while (hebrewStartDate.getJewishYear() - 3760 <= year + 1) {
-            hebrewStartDate.forward(Calendar.MONTH, 1);
-            hebrewEndDate.forward(Calendar.MONTH, 1);
-            if (hebrewStartDate.getJewishYear() - 3760 <= year + 1) {
-              occurrences.add(event.copyWith(
-                startDate: hebrewStartDate.getGregorianCalendar(),
-                endDate: hebrewEndDate.getGregorianCalendar(),
-              ));
+            for (int monthsToAdd = 1; monthsToAdd <= 24; monthsToAdd++) {
+              try {
+                int newMonth = originalJewishMonth + monthsToAdd;
+                int newYear = currentYear;
+
+                // Handle year rollover
+                while (newMonth > 12) {
+                  if (JewishDate().isJewishLeapYear() && newMonth > 13) {
+                    newMonth -= 13;
+                    newYear++;
+                  } else if (!JewishDate().isJewishLeapYear()) {
+                    newMonth -= 12;
+                    newYear++;
+                  } else {
+                    break;
+                  }
+                }
+
+                // Create new Hebrew date
+                JewishDate newHebrewDate = JewishDate.initDate(
+                    jewishYear: newYear,
+                    jewishMonth: newMonth,
+                    jewishDayOfMonth: originalJewishDay);
+                DateTime newGregorianStart =
+                    newHebrewDate.getGregorianCalendar();
+
+                if (newGregorianStart.year <= year + 1) {
+                  DateTime newGregorianEnd =
+                      newGregorianStart.add(eventDuration);
+                  occurrences.add(event.copyWith(
+                    startDate: newGregorianStart,
+                    endDate: newGregorianEnd,
+                  ));
+                }
+              } catch (e) {
+                print("Error creating Hebrew monthly occurrence: $e");
+                continue;
+              }
             }
-          }
-          break;
+            break;
 
-        case 'Once a Year':
-          while (hebrewStartDate.getJewishYear() - 3760 <= year + 1) {
-            hebrewStartDate.forward(Calendar.YEAR, 1);
-            hebrewEndDate.forward(Calendar.YEAR, 1);
-            if (hebrewStartDate.getJewishYear() - 3760 <= year + 1) {
-              occurrences.add(event.copyWith(
-                startDate: hebrewStartDate.getGregorianCalendar(),
-                endDate: hebrewEndDate.getGregorianCalendar(),
-              ));
+          case 'Once a Year':
+            // For Hebrew yearly recurrence (like Yahrzeit)
+            int originalJewishMonth = hebrewStartDate.getJewishMonth();
+            int originalJewishDay = hebrewStartDate.getJewishDayOfMonth();
+            int startingYear = hebrewStartDate.getJewishYear();
+
+            for (int yearsToAdd = 1; yearsToAdd <= 5; yearsToAdd++) {
+              try {
+                int newJewishYear = startingYear + yearsToAdd;
+                JewishDate newHebrewDate = JewishDate.initDate(
+                    jewishYear: newJewishYear,
+                    jewishMonth: originalJewishMonth,
+                    jewishDayOfMonth: originalJewishDay);
+                DateTime newGregorianStart =
+                    newHebrewDate.getGregorianCalendar();
+
+                if (newGregorianStart.year <= year + 1) {
+                  DateTime newGregorianEnd =
+                      newGregorianStart.add(eventDuration);
+                  occurrences.add(event.copyWith(
+                    startDate: newGregorianStart,
+                    endDate: newGregorianEnd,
+                  ));
+                }
+              } catch (e) {
+                print("Error creating Hebrew yearly occurrence: $e");
+                continue;
+              }
             }
-          }
-          break;
+            break;
 
-        default:
-          break;
+          default:
+            break;
+        }
+      } catch (e) {
+        print("Error processing Hebrew date: $e");
+        // Fall back to original event only
       }
     } else {
+      // Gregorian calendar logic (unchanged)
       switch (event.recurrence) {
         case 'Every Day':
-          while (startDate.year == year) {
-            startDate = startDate.add(Duration(days: 1));
-            endDate = endDate.add(Duration(days: 1));
-            if (startDate.year == year) {
-              occurrences
-                  .add(event.copyWith(startDate: startDate, endDate: endDate));
+          DateTime currentStart = startDate;
+          DateTime currentEnd = endDate;
+
+          while (currentStart.year == year) {
+            currentStart = currentStart.add(Duration(days: 1));
+            currentEnd = currentEnd.add(Duration(days: 1));
+            if (currentStart.year == year) {
+              occurrences.add(
+                  event.copyWith(startDate: currentStart, endDate: currentEnd));
             }
           }
           break;
 
         case 'Once a Week':
-          while (startDate.year == year) {
-            startDate = startDate.add(Duration(days: 7));
-            endDate = endDate.add(Duration(days: 7));
-            if (startDate.year == year) {
-              occurrences
-                  .add(event.copyWith(startDate: startDate, endDate: endDate));
+          DateTime currentStart = startDate;
+          DateTime currentEnd = endDate;
+
+          while (currentStart.year == year) {
+            currentStart = currentStart.add(Duration(days: 7));
+            currentEnd = currentEnd.add(Duration(days: 7));
+            if (currentStart.year == year) {
+              occurrences.add(
+                  event.copyWith(startDate: currentStart, endDate: currentEnd));
             }
           }
           break;
 
         case 'Once a Month':
-          while (startDate.year == year) {
-            startDate =
-                DateTime(startDate.year, startDate.month + 1, startDate.day);
-            endDate = DateTime(endDate.year, endDate.month + 1, endDate.day);
-            if (startDate.year == year) {
-              occurrences
-                  .add(event.copyWith(startDate: startDate, endDate: endDate));
+          DateTime currentStart = startDate;
+          DateTime currentEnd = endDate;
+
+          while (currentStart.year == year) {
+            // Properly handle month advancement
+            int newMonth = currentStart.month + 1;
+            int newYear = currentStart.year;
+            if (newMonth > 12) {
+              newMonth = 1;
+              newYear++;
+            }
+
+            try {
+              currentStart = DateTime(newYear, newMonth, currentStart.day,
+                  currentStart.hour, currentStart.minute);
+              currentEnd = DateTime(newYear, newMonth, currentEnd.day,
+                  currentEnd.hour, currentEnd.minute);
+
+              if (currentStart.year == year) {
+                occurrences.add(event.copyWith(
+                    startDate: currentStart, endDate: currentEnd));
+              }
+            } catch (e) {
+              // Handle invalid dates (e.g., Feb 30)
+              break;
             }
           }
           break;
 
         case 'Once a Year':
-          while (startDate.year == year) {
-            startDate =
-                DateTime(startDate.year + 1, startDate.month, startDate.day);
-            endDate = DateTime(endDate.year + 1, endDate.month, endDate.day);
-            if (startDate.year == year) {
-              occurrences
-                  .add(event.copyWith(startDate: startDate, endDate: endDate));
+          DateTime currentStart = startDate;
+          DateTime currentEnd = endDate;
+
+          while (currentStart.year <= year + 5) {
+            currentStart = DateTime(currentStart.year + 1, currentStart.month,
+                currentStart.day, currentStart.hour, currentStart.minute);
+            currentEnd = DateTime(currentEnd.year + 1, currentEnd.month,
+                currentEnd.day, currentEnd.hour, currentEnd.minute);
+
+            if (currentStart.year == year) {
+              occurrences.add(
+                  event.copyWith(startDate: currentStart, endDate: currentEnd));
             }
           }
           break;
