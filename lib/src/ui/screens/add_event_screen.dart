@@ -47,6 +47,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
   DateTime? endDate;
   String recurrence = "One Time";
   bool isHebrew = false;
+  bool isOneDayEvent = false;
   final List<String> recurrenceOptions = [
     "One Time",
     "Every Day",
@@ -163,7 +164,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
       },
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -300,6 +300,31 @@ class _AddEventScreenState extends State<AddEventScreen> {
               style: AppTypography.textFieldText.copyWith(fontSize: 16),
             ),
             _hebrewDatePicker(),
+            spacerWidth(20),
+            Row(
+              children: [
+                Text('1 Day Event',
+                    style: AppTypography.textFieldText.copyWith(fontSize: 16)),
+                Switch(
+                  value: isOneDayEvent,
+                  onChanged: (val) {
+                    setState(() {
+                      isOneDayEvent = val;
+                      if (isOneDayEvent && startDate != null) {
+                        endDate = DateTime(
+                          startDate!.year,
+                          startDate!.month,
+                          startDate!.day,
+                          endDate?.hour ?? startDate!.hour,
+                          endDate?.minute ?? startDate!.minute,
+                        );
+                      }
+                    });
+                  },
+                  activeColor: Colors.orange,
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -326,6 +351,15 @@ class _AddEventScreenState extends State<AddEventScreen> {
                               if (dateTime != null) {
                                 setState(() {
                                   startDate = dateTime;
+                                  if (isOneDayEvent) {
+                                    endDate = DateTime(
+                                      dateTime.year,
+                                      dateTime.month,
+                                      dateTime.day,
+                                      endDate?.hour ?? dateTime.hour,
+                                      endDate?.minute ?? dateTime.minute,
+                                    );
+                                  }
                                 });
                               }
                             },
@@ -339,6 +373,15 @@ class _AddEventScreenState extends State<AddEventScreen> {
                           if (date != null) {
                             setState(() {
                               startDate = date;
+                              if (isOneDayEvent) {
+                                endDate = DateTime(
+                                  date.year,
+                                  date.month,
+                                  date.day,
+                                  endDate?.hour ?? date.hour,
+                                  endDate?.minute ?? date.minute,
+                                );
+                              }
                             });
                           }
                         }
@@ -346,7 +389,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
                       child: Row(
                         children: [
                           Text(
-                            "Start Date:   ",
+                            isOneDayEvent ? "Date:   " : "Start Date:   ",
                             style: AppTypography.textFieldText
                                 .copyWith(fontSize: 13),
                           ),
@@ -360,52 +403,54 @@ class _AddEventScreenState extends State<AddEventScreen> {
                         ],
                       ),
                     ),
-                    spacer(10),
-                    InkWell(
-                      onTap: () async {
-                        if (isHebrew) {
-                          showHebrewCupertinoDatePicker(
-                            confirmText: "Confirm",
-                            context: context,
-                            onDateChanged: (dateTime) => print(dateTime),
-                            onConfirm: (dateTime) {
-                              if (dateTime != null) {
-                                setState(() {
-                                  endDate = dateTime;
-                                });
-                              }
-                            },
-                          );
-                        } else {
-                          final date = await showDatePicker(
-                            context: context,
-                            firstDate: DateTime(2000),
-                            lastDate: DateTime(2100),
-                          );
-                          if (date != null) {
-                            setState(() {
-                              endDate = date;
-                            });
+                    if (!isOneDayEvent) ...[
+                      spacer(10),
+                      InkWell(
+                        onTap: () async {
+                          if (isHebrew) {
+                            showHebrewCupertinoDatePicker(
+                              confirmText: "Confirm",
+                              context: context,
+                              onDateChanged: (dateTime) => print(dateTime),
+                              onConfirm: (dateTime) {
+                                if (dateTime != null) {
+                                  setState(() {
+                                    endDate = dateTime;
+                                  });
+                                }
+                              },
+                            );
+                          } else {
+                            final date = await showDatePicker(
+                              context: context,
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime(2100),
+                            );
+                            if (date != null) {
+                              setState(() {
+                                endDate = date;
+                              });
+                            }
                           }
-                        }
-                      },
-                      child: Row(
-                        children: [
-                          Text(
-                            "End Date:   ",
-                            style: AppTypography.textFieldText
-                                .copyWith(fontSize: 13),
-                          ),
-                          Text(
-                            endDate != null
-                                ? "${endDate!.month}/${endDate!.day}/${endDate!.year}"
-                                : "MM/DD/YY",
-                            style: AppTypography.textFieldText
-                                .copyWith(fontSize: 13),
-                          ),
-                        ],
+                        },
+                        child: Row(
+                          children: [
+                            Text(
+                              "End Date:   ",
+                              style: AppTypography.textFieldText
+                                  .copyWith(fontSize: 13),
+                            ),
+                            Text(
+                              endDate != null
+                                  ? "${endDate!.month}/${endDate!.day}/${endDate!.year}"
+                                  : "MM/DD/YY",
+                              style: AppTypography.textFieldText
+                                  .copyWith(fontSize: 13),
+                            ),
+                          ],
+                        ),
                       ),
-                    )
+                    ],
                   ],
                 ),
               ),
@@ -440,7 +485,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
                           ),
                           Text(
                             startDate != null
-                                ? "${startDate!.hour}:${startDate!.minute}"
+                                ? "${startDate!.hour}:${startDate!.minute.toString().padLeft(2, '0')}"
                                 : "hh:mm",
                             style: AppTypography.textFieldText
                                 .copyWith(fontSize: 13),
@@ -455,8 +500,18 @@ class _AddEventScreenState extends State<AddEventScreen> {
                             context: context, initialTime: TimeOfDay.now());
                         if (time != null) {
                           setState(() {
-                            endDate = endDate?.copyWith(
-                                hour: time.hour, minute: time.minute);
+                            if (isOneDayEvent && startDate != null) {
+                              endDate = DateTime(
+                                startDate!.year,
+                                startDate!.month,
+                                startDate!.day,
+                                time.hour,
+                                time.minute,
+                              );
+                            } else {
+                              endDate = endDate?.copyWith(
+                                  hour: time.hour, minute: time.minute);
+                            }
                           });
                         }
                       },
@@ -469,7 +524,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
                           ),
                           Text(
                             endDate != null
-                                ? "${endDate!.hour}:${endDate!.minute}"
+                                ? "${endDate!.hour}:${endDate!.minute.toString().padLeft(2, '0')}"
                                 : "hh:mm",
                             style: AppTypography.textFieldText
                                 .copyWith(fontSize: 13),

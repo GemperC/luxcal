@@ -351,7 +351,7 @@ class _EventsWidgetState extends State<EventsWidget> {
   Widget tabContainers(BuildContext context, CalendarState state) {
     return Row(
       children: [
-        _tabContainer("Upcoming", 1),
+        _tabContainer("Upcoming Events", 1),
         _tabContainer("News", 2),
         _tabContainer("${state.selectedDay.month}.${state.selectedDay.day}", 3),
       ],
